@@ -2,124 +2,138 @@
 #include <fstream>
 #include <string>
 #include <vector>
-
 using namespace std;
 
-//string s;
+string s;
 
-class InterfaceReader {
+class IReader
+{
 public:
-    InterfaceReader() {}
-
-    virtual ~InterfaceReader() {}
-
-    void runReader(int key);
+    IReader() {}
+    virtual ~IReader() {}
+    virtual void runReader(int& chunk_size, string& str, int& start) = 0;
 };
 
 
-class InterfaceWriter {
+class IWriter
+{
 public:
-    InterfaceWriter() {}
-
-    virtual ~InterfaceWriter() {}
-
-    virtual void runWriter() = 0;
+    IWriter() {}
+    virtual ~IWriter() {}
+    virtual void runWriter(string str) = 0;
 };
 
 
-class Encrypt {
+class Encrypt
+{
 public:
     int wrap(int number, int maxvalue);
 
-    char *encrypt(char *rawText, int key) {
+    char* encrypt(char* rawText, int key)
+    {
+
+
         int i = 0;
         const char upperAlph[27] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"; // 27 -- длина строки, +1 пустое значение
         const char lowerAlph[27] = "abcdefghijklmnopqrstuvwxyz";
-        while (rawText[i] != NULL) {
+        while (rawText[i] != NULL)
+        {
             i++;
         }
-        char *text = new char[i];
+        char* text = new char[i];
         i = 0;
-        while (rawText[i] != NULL) {
+        while (rawText[i] != NULL)
+        {
             if (isalpha(rawText[i])) // isalpha -- чи є символ в  алфавіті
             {
                 if (isupper(rawText[i])) // перевіряє, чи є  у верхньому регістрі
                 {
                     text[i] = upperAlph[wrap(rawText[i] - 'A' + key, 26)];
-                } else {
+                }
+                else
+                {
                     text[i] = lowerAlph[wrap(rawText[i] - 'a' + key, 26)];
                 }
-            } else {
+            }
+            else
+            {
                 text[i] = (rawText[i]);
             }
             i++;
         }
 
-        //InterfaceWriter::runWriter(text);
         return text;
     }
 };
 
-class Decrypt {
+class Decrypt
+{
 public:
-    char *decrypt(char *encryptedText, int key) {
+    char* decrypt(char* encryptedText, int key)
+    {
         Encrypt e;
         return e.encrypt(encryptedText, -key);
     }
 };
 
-class FileReader : virtual public InterfaceReader {
+class FileReader : public IReader
+{
 public:
-    virtual void runReader(int key) {
+    void runReader(int& chunk_size, string& str, int& start)
+    {
         Encrypt e;
 
         string filePath = "D:\\Example.txt";
         string line;
-        string s;
-
         ifstream in(filePath, ifstream::binary);
 
-        const int chunk_size = 5;
-        int bytes_to_read = 0;
-        int safe_index = 0;
-        if (in.is_open()) {
-            while (getline(in, line)) {
-                if (!line.empty()) {
-                    while (safe_index < line.size()) {
-                        if (line[safe_index] == '\r') {
-                            s += line[safe_index];
-                            break;
-                        }
+        int temp_chunk_size = chunk_size;
+        int counterLiterals = 0;
+        bool breakCycle = false;
+        bool continueCycle = false;
+        if (in.is_open())
+        {
+            while (true) {
+                char* buffer = new char[chunk_size];
+                in.seekg(start);
+                in.read(buffer, temp_chunk_size);
 
-                        if (bytes_to_read == chunk_size && safe_index < line.size()) {
-                            safe_index++;
-                            bytes_to_read = 0;
-                            //string encText =
-                            e.encrypt((char *) s.c_str(), key);
-                            //runWriter();
+                for (int i = 0; i < temp_chunk_size; i++)
+                {
+                    if (buffer[i] == '\r')
+                    {
+                        start = counterLiterals + 1;
 
-                            s = "";
-
-                            continue;
-                        } else if (bytes_to_read == chunk_size && safe_index == line.size()) {
-                            safe_index++;
-                            bytes_to_read = 0;
-
-                            e.encrypt((char *) s.c_str(), key);
-                            s = "";
-
-                            break;
-                        }
-
-                        s += line[safe_index];
-                        safe_index++;
-                        bytes_to_read++;
-
+                        temp_chunk_size = chunk_size - counterLiterals + 1;
+                        str += '\n';
+                        delete[] buffer;
+                        continueCycle = true;
+                        break;
                     }
+
+                    if (buffer[i] == '\n')
+                    {
+                        continue;
+                    }
+                    counterLiterals++;
+                    str += buffer[i];
                 }
 
-                safe_index = 0;
+                if (breakCycle)
+                {
+                    breakCycle = false;
+                    delete[] buffer;
+                    break;;
+                }
 
+                if (continueCycle)
+                {
+                    continueCycle = false;
+                    continue;
+                }
+                start += chunk_size;
+                delete[] buffer;
+                break;
             }
         }
 
@@ -127,71 +141,100 @@ public:
     }
 };
 
-class FileWriter : virtual public InterfaceWriter {
+class FileWriter : public IWriter
+{
 public:
-    void runWriter(string str) {
+    void runWriter(string str)
+    {
         string filePath = "D:\\Input.txt";
         ofstream out;
 
-        out.open(filePath);
-        if (out.is_open()) {
+        out.open(filePath, std::ios::app);
+
+        if (out.is_open())
+        {
             out << str;
         }
-
         out.close();
     }
+
+
+
 };
 
-int Encrypt::wrap(int number, int maxvalue) {
-    if (number < 0) {
+int Encrypt::wrap(int number, int maxvalue)
+{
+    if (number < 0)
+    {
         number += maxvalue * (-number / maxvalue + 1); // для від'ємнних чисел що обернеться навколо нуля і границь
     }
     return number % maxvalue;
 }
 
 
-int main() {
+int main()
+{
 
-    InterfaceReader* ir = new FileReader();
-    InterfaceWriter* ew = new FileWriter();
-    ir->runReader(3);
-
-
+    int chunk_size = 128;
+    int temp_chunk_size;
+    string str = "";
+    int start = 0;
     Encrypt e;
     Decrypt d;
-    std::string input_text;
-    int key;
-    string repeat;
-    while (true)
+    IReader* ir = new FileReader();
+    IWriter* ew = new FileWriter();
+
+    bool deleteExistFile = true;
+
+
+    string tempStr = "";
+    int select = 0;
+    char* temp;
+
+    cout << "Encrypt - 1; Decrypt - 2: ";
+    cin >> select;
+
+    switch (select)
     {
-        cout << "enter text: ";
-        cin >> input_text;
+        case 1:
+            temp_chunk_size = chunk_size;
+            ir->runReader(chunk_size, str, start);
+            temp = e.encrypt((char*)str.c_str(), 3);
 
-        cout << "enter key: ";
-        cin >> key;
+            for (int i = 0; i < temp_chunk_size; i++)
+            {
+                if (temp[i] == '\n')
+                {
+                    tempStr += temp[i];
+                    temp_chunk_size += 1;
+                    continue;
+                }
+                tempStr += temp[i];
+            }
+            ew->runWriter(tempStr);
+            tempStr = "";
+            str = "";
+            delete[] temp;
 
-        int select_command;
-        cout << "Choose the command (1-encrypt, 2- decrypt):\n";
-        cin >> select_command;
+        case 2:
+            temp_chunk_size = chunk_size;
+            ir->runReader(chunk_size, str, start);
+            temp = d.decrypt((char*)str.c_str(), 3);
 
-        switch (select_command) {
-            case 1:
-                cout << e.encrypt((char*)input_text.c_str(), key) << endl;
-                break;
-            case 2:
-                cout << d.decrypt((char*)input_text.c_str(), key);
-                break;
-        }
-        cout << "\nrepeat the program: ";
-        cin >> repeat;
-
-        if (repeat == "yes")
-        {
-            continue;
-        }
-        else if (repeat == "no")
-        {
-            break;
-        }
+            for (int i = 0; i < temp_chunk_size; i++)
+            {
+                if (temp[i] == '\n')
+                {
+                    tempStr += temp[i];
+                    temp_chunk_size += 1;
+                    continue;
+                }
+                tempStr += temp[i];
+            }
+            ew->runWriter(tempStr);
+            tempStr = "";
+            str = "";
+            delete[] temp;
     }
+    return 0;
 }
